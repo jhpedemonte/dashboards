@@ -39,6 +39,15 @@ app.use(bodyParser.urlencoded({
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// redirect trailing slash
+app.use(function(req, res, next) {
+   if(req.url.substr(-1) === '/' && req.url.length > 1) {
+       res.redirect(301, req.url.slice(0, -1));
+   } else {
+       next();
+   }
+});
+
 app.use('/', routes);
 app.use('/api', apiRoutes);
 // app.use('/users', users);

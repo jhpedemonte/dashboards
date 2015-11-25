@@ -1,35 +1,15 @@
-require([
-    '../components/jupyter-js-services',
-    '../components/jupyter-js-output-area'
-], function(Services, OutputArea) {
-    var loc = window.location;
-    var kernelUrl = loc.protocol + '//' + loc.host;
-
-    var kernelOptions = {
-        baseUrl: kernelUrl,
-        wsUrl: kernelUrl.replace(/^http/, 'ws'),
-        name: 'python3'
-    };
-    Services.startNewKernel(kernelOptions)
-        .then(function(kernel) {
-            // show a busy indicator when communicating with kernel
-            var debounced;
-            kernel.statusChanged.connect(function(_kernel, status) {
-                clearTimeout(debounced);
-                debounced = setTimeout(function() {
-                    var isBusy = status === Services.KernelStatus.Busy;
-                    $('.busy-indicator')
-                        .toggleClass('show', isBusy)
-                        // Prevent progress animation when hidden by removing 'active' class.
-                        .find('.progress-bar')
-                            .toggleClass('active', isBusy);
-                }, 500);
-            });
-            kernel.commOpened.connect(function(_kernel, commMsg) {
-                var comm = kernel.connectToComm(commMsg.target_name, commMsg.comm_id);
-            });
-        })
-        .catch(function(e) {
-            console.error('failed to create kernel', e);
-        });
+// use global require.js to setup the paths for our dependencies
+requirejs.config({
+    paths: {
+        Gridstack: require.toUrl('/components/gridstack.min'),
+        lodash: require.toUrl('/components/lodash.min'),
+        jquery: require.toUrl('/components/jquery.min'),
+        'jquery-ui/core': require.toUrl('/components/jquery-ui/core.min'),
+        'jquery-ui/mouse': require.toUrl('/components/jquery-ui/mouse.min'),
+        'jquery-ui/widget': require.toUrl('/components/jquery-ui/widget.min'),
+        'jquery-ui/resizable': require.toUrl('/components/jquery-ui/resizable.min'),
+        'jquery-ui/draggable': require.toUrl('/components/jquery-ui/draggable.min'),
+        'jupyter-js-output-area': require.toUrl('/components/jupyter-js-output-area'),
+        'jupyter-js-services': require.toUrl('/components/jupyter-js-services')
+    }
 });
