@@ -1,5 +1,3 @@
-
-
 var express = require('express');
 var path = require('path');
 var favicon = require('serve-favicon');
@@ -13,8 +11,6 @@ var routes = require('./routes/index');
 var apiRoutes = require('./routes/api');
 // var users = require('./routes/user');
 
-var kernelProxy = require('./app/kernel-proxy');
-
 var app = express();
 
 var env = process.env.NODE_ENV || 'development';
@@ -22,7 +18,6 @@ app.locals.ENV = env;
 app.locals.ENV_DEVELOPMENT = env == 'development';
 
 // view engine setup
-
 app.engine('handlebars', exphbs({
   defaultLayout: 'main',
   partialsDir: ['views/partials/']
@@ -32,10 +27,14 @@ app.set('view engine', 'handlebars');
 
 // app.use(favicon(__dirname + '/public/img/favicon.ico'));
 app.use(logger('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({
-  extended: true
-}));
+// DON"T USE THESE when proxying. The bodyParser changes the request, but we
+// need to pass as is when proxying.
+// // TODO: For some reason, XHR calls from jupyter-js-services are called with
+// // content type of `text/plain;charset=UTF-8` instead of a JSON type. Normally,
+// // we would use `bodyParser.json()` here, but instead we have to use `text()`
+// // because of this and parse ourselves.
+// app.use(bodyParser.text());
+// app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -50,6 +49,7 @@ app.use(function(req, res, next) {
 
 app.use('/', routes);
 app.use('/api', apiRoutes);
+// app.use(apiRoutes);
 // app.use('/users', users);
 
 /// catch 404 and forward to error handler
@@ -63,7 +63,6 @@ app.use(function(req, res, next) {
 
 // development error handler
 // will print stacktrace
-
 if (app.get('env') === 'development') {
     app.use(function(err, req, res, next) {
         res.status(err.status || 500);
@@ -85,7 +84,5 @@ app.use(function(err, req, res, next) {
         title: 'error'
     });
 });
-
-// kernelProxy.init(config);
 
 module.exports = app;
