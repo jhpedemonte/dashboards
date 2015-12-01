@@ -3,8 +3,9 @@ require(['main'], function() {
         'jquery',
         'gridstack-custom',
         'jupyter-js-services',
-        'jupyter-js-output-area'
-    ], function($, Gridstack, Services, OutputArea) {
+        'jupyter-js-output-area',
+        './kernel'
+    ], function($, Gridstack, Services, OutputArea, Kernel) {
         'use strict';
 
         var CONTAINER_URL = 'urth_container_url';
@@ -75,6 +76,7 @@ require(['main'], function() {
         var row = _getQueryParam('row');
         if (!row) {
             _initGrid();
+            Kernel.start();
         } else {
             // show only given row/column
             var col = getQueryParam('col');

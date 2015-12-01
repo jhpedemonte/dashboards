@@ -1,5 +1,4 @@
 define([
-    'main',
     'jupyter-js-services'
 ], function(Services) {
 
@@ -38,5 +37,5 @@ define([
 
     return {
         start: _startKernel
-    }
+    };
 });

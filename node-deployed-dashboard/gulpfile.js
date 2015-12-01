@@ -72,7 +72,7 @@ gulp.task('copy:components', ['browserify:components'], function() {
             './bower_components/jquery-ui/ui/minified/widget.min.js',
             './bower_components/jquery-ui/ui/minified/resizable.min.js',
             './bower_components/jquery-ui/ui/minified/draggable.min.js'
-        ]).pipe(gulp.dest('./public/components/jquery-ui'))
+        ]).pipe(gulp.dest('./public/components/jquery-ui'));
     return merge(c1, c2);
 });
 
@@ -92,7 +92,7 @@ var nodemonOptions = {
     script: 'bin/www',
     ext: 'js handlebars coffee',
     stdout: false
-}
+};
 
 gulp.task('develop', function () {
     livereload.listen();
