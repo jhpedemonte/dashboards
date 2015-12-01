@@ -18,14 +18,6 @@ function _loadNb(nb) {
     });
 }
 
-function _stripCode(rawNbData) {
-    var nb = JSON.parse(rawNbData); // parse error should be handled in routes
-    nb.cells.forEach(function(cell) {
-        delete cell.source;
-    });
-    return nb;
-}
-
 module.exports = {
     /**
      * Loads, parses, and returns cells (minus code)
@@ -33,12 +25,5 @@ module.exports = {
      * @param  {String} nb - name of the notbeook to load
      * @return {Promise} ES6 Promise resolved with notebook JSON or error string
      */
-    load: _loadNb,
-
-    /**
-     * Parses raw notebook data and returns notebook object without source code
-     * @param  {JSON} rawNbData - stringified notebook data
-     * @return {Object} notebook object stripped of source code
-     */
-    stripCode: _stripCode
+    load: _loadNb
 };

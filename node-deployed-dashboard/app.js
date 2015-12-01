@@ -6,6 +6,7 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var exphbs  = require('express-handlebars');
 var config = require('./config/config');
+var hbsHelpers = require('./app/handlebar-helpers');
 
 var routes = require('./routes/index');
 var apiRoutes = require('./routes/api');
@@ -19,8 +20,9 @@ app.locals.ENV_DEVELOPMENT = env == 'development';
 
 // view engine setup
 app.engine('handlebars', exphbs({
-  defaultLayout: 'main',
-  partialsDir: ['views/partials/']
+    defaultLayout: 'main',
+    partialsDir: ['views/partials/'],
+    helpers: hbsHelpers
 }));
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'handlebars');

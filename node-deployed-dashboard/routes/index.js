@@ -1,5 +1,6 @@
 var express = require('express');
-var nb = require('../app/notebook-ops');
+var nbops = require('../app/notebook-ops');
+var nbstore = require('../app/notebook-store');
 
 var router = express.Router();
 
@@ -15,37 +16,41 @@ router.get('/notebooks', function(req, res) {
     });
 });
 
+function handleNotebookError(res, status, err, msg) {
+    res.status(status);
+    res.render('error', {
+        message: msg || err.message,
+        error: err,
+        title: 'error'
+    });
+}
+
 /* GET /notebooks/* - a single notebook. */
 router.get('/notebooks/*', function(req, res) {
     var path = req.params[0];
     if (path) {
-        nb.load(path).then(
+        nbops.load(path).then(
             function success(rawData) {
-                var nbWithoutCode, status = 200;
+                var notebook;
 
                 // TODO execute nb code in kernel
 
-                // strip code from nb
                 try {
-                    nbWithoutCode = nb.stripCode(rawData);
+                    notebook = JSON.parse(rawData);
+                    nbstore.add(path, notebook);
+
+                    res.status(200);
+                    res.render('dashboard', {
+                        title: 'Dashboard',
+                        notebook: notebook
+                    });
                 } catch(e) {
-                    nbWidhoutCode = 'Error parsing notebook data';
-                    status = 500;
+                    handleNotebookError(res, 500, e, 'Error parsing notebook data');
                 }
 
-                res.status(status);
-                res.render('dashboard', {
-                    title: 'Dashboard',
-                    notebook: nbWithoutCode
-                });
             },
             function error(err) {
-                res.status(404);
-                res.render('error', {
-                    message: err.message+' '+path,
-                    error: err,
-                    title: 'error'
-                });
+                handleNotebookError(res, 404, err);
             }
         );
     } else {
