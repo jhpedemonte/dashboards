@@ -31,13 +31,17 @@ body {
         font-size: 14px;
         line-height: 20px;
 
+        .dashboard-cell.hidden {
+            display: none;
+        }
+
         .grid-stack-item.rendered_html {
             /*
                 computed in dashboard.js:
                 padding: (margin/2)px  (margin/2 + 6)px;
              */
         }
-        
+
         /* busy indicator */
         .busy-indicator {
             visibility: hidden;

@@ -85,7 +85,7 @@ gulp.task('less', function () {
 });
 
 gulp.task('watch', function() {
-    gulp.watch('./public/css/*.less', ['less']);
+    gulp.watch('./less/*.less', ['less']);
 });
 
 var nodemonOptions = {

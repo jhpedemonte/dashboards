@@ -2,27 +2,15 @@ require(['main'], function() {
     require([
         'jquery',
         'gridstack-custom',
-        'jupyter-js-services',
         'jupyter-js-output-area',
         './kernel'
-    ], function($, Gridstack, Services, OutputArea, Kernel) {
+    ], function($, Gridstack, OutputArea, Kernel) {
         'use strict';
 
         var CONTAINER_URL = 'urth_container_url';
         var SESSION_URL = 'urth_session_url';
 
         var $container = $('#dashboard-container');
-
-        function _getQueryParam(name) {
-            var vars = window.location.search.substring(1).split('&');
-            for (var i = 0; i < vars.length; i++) {
-                var pair = vars[i].split('=');
-                if (pair[0] === name) {
-                    return decodeURIComponent(pair[1]);
-                }
-            }
-            return null;
-        }
 
         function _initGrid() {
             // enable gridstack
@@ -43,45 +31,30 @@ require(['main'], function() {
             gridstack.generateStylesheet(styleRules);
         }
 
-        function _showRow(row, col) {
-            $('body').addClass('show-row-only');
-            var $cells = $container.find('.grid-stack-item');
-
-            var rowAttr = '[data-gs-y="' + row + '"]';
-            $cells.filter(':not(' + rowAttr + ')').hide();
-
-            if (col) {
-                // show a single cell
-                $('body').addClass('single-cell');
-                var colAttr = '[data-gs-x="' + col + '"]';
-                $cells.filter(':not(' + colAttr + ')').hide();
-            } else {
-                // show full row
-                $cells.filter(rowAttr).css('flex', function() {
-                    var $cell = $(this);
-                    var sizex = $cell.attr('data-gs-width');
-                    return sizex + ' 0 ' + sizex + 'px';
-                });
-            }
-        }
-
-        // create an output area for each dashboard cell
-        $('.dashboard-cell').each(function() {
-            var model = new OutputArea.OutputModel();
-            var view = new OutputArea.OutputView(model, document);
-            $(this).append(view.el);
-        });
-
         // initialize Gridstack
-        var row = _getQueryParam('row');
-        if (!row) {
-            _initGrid();
-            Kernel.start();
-        } else {
-            // show only given row/column
-            var col = getQueryParam('col');
-            showRow(row, col);
-        }
+        _initGrid();
 
+        // start kernel
+        var ajaxOptions = {
+            requestHeaders: {
+                'X-jupyter-notebook-path': window.location.pathname
+            }
+        };
+        Kernel.start(ajaxOptions).then(function() {
+            // create an output area for each dashboard cell
+            $('.dashboard-cell.code-cell').each(function() {
+                var $cell = $(this);
+
+                var model = new OutputArea.OutputModel();
+                var view = new OutputArea.OutputView(model, document);
+                $cell.append(view.el);
+
+                Kernel.execute($cell.index(), function(msg) {
+                    if (model) {
+                        model.consumeMessage(msg);
+                    }
+                });
+            });
+        });
     });
-})
+});
