@@ -7,11 +7,13 @@ var nbstore = require('../app/notebook-store');
 var KERNEL_GATEWAY_URL = 'http://192.168.99.100:9500';
 
 var server = null;
+var kernels = {}; // TODO remove old kernels, somehow
+
 var proxy = httpProxy.createProxyServer({
         target: KERNEL_GATEWAY_URL + '/api',
     });
 
-function setupWSProxy(_server, nbpath) {
+function setupWSProxy(_server) {
     debug('setting up WebSocket proxy');
     server = _server;
 
@@ -19,6 +21,15 @@ function setupWSProxy(_server, nbpath) {
     // WebSocket requests as well.
     var re = new RegExp('^/api(/.*$)');
     _server.on('upgrade', function(req, socket, head) {
+        // save notebook path, based on kernel id
+        var matches = req.url.match(/^\/api\/kernels\/([^/]+)/);
+        if (matches) {
+            var kernelid = matches[1];
+            var nbpath = kernels[kernelid];
+        } else {
+            // TODO error handling
+        }
+
         var oldEmitFn = socket.emit;
         socket.emit = function(eventName, data) {
             if (eventName === 'data') {
@@ -59,13 +70,7 @@ var proxyRoute = function(req, res, next) {
     proxy.web(req, res);
 
     if (!server) {
-        var notebookPathHeader = req.headers['x-jupyter-notebook-path'];
-        if (notebookPathHeader) {
-            var nbpath = notebookPathHeader.match(/^\/notebooks\/(.*)$/)[1];
-            setupWSProxy(req.connection.server, nbpath);
-        } else {
-            // TODO return error status, need notebook path to execute code
-        }
+        setupWSProxy(req.connection.server);
     }
 };
 
@@ -81,6 +86,27 @@ proxy.on('proxyReqWs', function(proxyReq, req, socket, options, head) {
 proxy.on('proxyRes', function (proxyRes, req, res) {
     debug('PROXY: response from ' + req.originalUrl,
         JSON.stringify(proxyRes.headers, true, 2));
+
+    // Store the notebook path for use within the WS proxy. We don't yet have session id (created
+    // on client) -- instead, store based on kernel ID.
+    if (req.originalUrl === '/api/kernels') {
+        proxyRes.on('data', function(chunk) {
+            try {
+                var data = JSON.parse(chunk);
+                if (!kernels.hasOwnProperty(data.id)) {
+                    var notebookPathHeader = req.headers['x-jupyter-notebook-path'];
+                    if (notebookPathHeader) {
+                        var nbpath = notebookPathHeader.match(/^\/notebooks\/(.*)$/)[1];
+                        kernels[data.id] = nbpath;
+                    } else {
+                        // TODO return error status, need notebook path to execute code
+                    }
+                }
+            } catch(e) {
+                // TODO error handling
+            }
+        });
+    }
 });
 
 module.exports = proxyRoute;

@@ -41,7 +41,7 @@ require(['main'], function() {
             }
         };
         Kernel.start(ajaxOptions).then(function() {
-            // create an output area for each dashboard cell
+            // create an output area for each dashboard code cell
             $('.dashboard-cell.code-cell').each(function() {
                 var $cell = $(this);
 
