@@ -3,7 +3,9 @@
 // [pimvdb](http://stackoverflow.com/users/514749).
 // Licensed under [cc by-sa 3.0](http://creativecommons.org/licenses/by-sa/3.0/)
 
-function encodeWebSocket(bytesRaw){
+function encodeWebSocket(data) {
+    var masks = data.masks;
+    var bytesRaw = data.payload;
     var bytesFormatted = [];
     bytesFormatted[0] = 129;
     if (bytesRaw.length <= 125) {
@@ -23,14 +25,30 @@ function encodeWebSocket(bytesRaw){
         bytesFormatted[8] = ( bytesRaw.length / Math.pow(2,  8) ) & 255;
         bytesFormatted[9] = ( bytesRaw.length                   ) & 255;
     }
-    for (var i = 0; i < bytesRaw.length; i++){
-        bytesFormatted.push(bytesRaw.charCodeAt(i));
+    if (masks) {
+        bytesFormatted[1] += 128; // set that it is masked
+        for (var j = 0, lenj = masks.length; j < lenj; j++) {
+            bytesFormatted.push(masks[j]);
+        }
+    }
+    var code;
+    for (var i = 0, len = bytesRaw.length; i < len; i++) {
+        code = bytesRaw.charCodeAt(i);
+        if (masks) {
+            code = code ^ data.masks[i % 4];
+        }
+        bytesFormatted.push(code);
     }
     return new Buffer(bytesFormatted);
 }
 
 function decodeWebSocket(data) {
+    if (data[0] !== 129) {
+        // non-text data
+        return null;
+    }
     var datalength = data[1] & 127;
+    var isMasked = !!(data[1] & 128);
     var indexFirstMask = 2;
     if (datalength == 126) {
         indexFirstMask = 4;
@@ -49,15 +67,26 @@ function decodeWebSocket(data) {
                      (data[8] * Math.pow(2,  8)) +
                       data[9];
     }
-    var masks = data.slice(indexFirstMask,indexFirstMask + 4);
-    var i = indexFirstMask + 4;
+    var i = 4;
+    var masks;
+    if (isMasked) {
+        masks = data.slice(indexFirstMask, indexFirstMask + 4);
+        i += indexFirstMask;
+    }
     var end = datalength + i;
     var index = 0;
     var output = '';
+    var code;
     while (i < end) {
-        output += String.fromCharCode(data[i++] ^ masks[index++ % 4]);
+        code = isMasked ?
+                data[i++] ^ masks[index++ % 4] :
+                data[i++];
+        output += String.fromCharCode(code);
     }
-    return output;
+    return {
+        masks: isMasked ? masks : null,
+        payload: output
+    };
 }
 
 module.exports = {
