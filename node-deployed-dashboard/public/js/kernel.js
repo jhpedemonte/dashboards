@@ -12,15 +12,23 @@ define([
 
     var _kernel;
 
-    function _startKernel(ajaxOptions) {
+    function _startKernel() {
         var loc = window.location;
         var kernelUrl = loc.protocol + '//' + loc.host;
 
         var kernelOptions = {
             baseUrl: kernelUrl,
             wsUrl: kernelUrl.replace(/^http/, 'ws'),
-            name: 'python3'
+            name: 'python3',
+            clientId: _uuid()
         };
+        var ajaxOptions = {
+            requestHeaders: {
+                'X-jupyter-notebook-path': window.location.pathname,
+                'X-jupyter-session-id': kernelOptions.clientId
+            }
+        };
+
         return Services.startNewKernel(kernelOptions, ajaxOptions)
             .then(function(kernel) {
                 _kernel = kernel;
@@ -45,6 +53,20 @@ define([
             .catch(function(e) {
                 console.error('failed to create kernel', e);
             });
+    }
+
+    /**
+     * Get a random 128b hex string (not a formal UUID)
+     * (from jupyter-js-services/utils.js)
+     */
+    function _uuid() {
+        var s = [];
+        var hexDigits = "0123456789abcdef";
+        var nChars = hexDigits.length;
+        for (var i = 0; i < 32; i++) {
+            s[i] = hexDigits.charAt(Math.floor(Math.random() * nChars));
+        }
+        return s.join("");
     }
 
     function _execute(cellIndex, resultHandler) {

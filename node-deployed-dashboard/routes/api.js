@@ -7,7 +7,7 @@ var nbstore = require('../app/notebook-store');
 var KERNEL_GATEWAY_URL = 'http://192.168.99.100:9500';
 
 var server = null;
-var kernels = {}; // TODO remove old kernels, somehow
+var sessions = {}; // TODO remove old sessions, somehow
 
 var proxy = httpProxy.createProxyServer({
         target: KERNEL_GATEWAY_URL + '/api',
@@ -21,15 +21,6 @@ function setupWSProxy(_server) {
     // WebSocket requests as well.
     var re = new RegExp('^/api(/.*$)');
     _server.on('upgrade', function(req, socket, head) {
-        // save notebook path, based on kernel id
-        var matches = req.url.match(/^\/api\/kernels\/([^/]+)/);
-        if (matches) {
-            var kernelid = matches[1];
-            var nbpath = kernels[kernelid];
-        } else {
-            // TODO error handling
-        }
-
         var oldEmitFn = socket.emit;
         socket.emit = function(eventName, data) {
             if (eventName === 'data') {
@@ -45,8 +36,11 @@ function setupWSProxy(_server) {
                     try {
                         decodedData = JSON.parse(decodedData);
                         if (decodedData.header.msg_type === 'execute_request') {
-                            var cellIdx = parseInt(decodedData.content.code, 10);
+                            // get notebook data for current session
+                            var nbpath = sessions[decodedData.header.session];
                             var nb = nbstore.get(nbpath);
+                            // get code string for cell at index and update WS message
+                            var cellIdx = parseInt(decodedData.content.code, 10);
                             var code = nb.cells[cellIdx].source.join('');
                             decodedData.content.code = code;
                             data = wsutils.encodeWebSocket(JSON.stringify(decodedData));
@@ -54,6 +48,7 @@ function setupWSProxy(_server) {
                     } catch(e) {
                         // TODO handle parse error in WS message
                         console.error('Failed to update `data` in WS', e);
+                        return; // don't forward message
                     }
                 }
             }
@@ -87,25 +82,22 @@ proxy.on('proxyRes', function (proxyRes, req, res) {
     debug('PROXY: response from ' + req.originalUrl,
         JSON.stringify(proxyRes.headers, true, 2));
 
-    // Store the notebook path for use within the WS proxy. We don't yet have session id (created
-    // on client) -- instead, store based on kernel ID.
+    // Store the notebook path for use within the WS proxy.
     if (req.originalUrl === '/api/kernels') {
-        proxyRes.on('data', function(chunk) {
-            try {
-                var data = JSON.parse(chunk);
-                if (!kernels.hasOwnProperty(data.id)) {
-                    var notebookPathHeader = req.headers['x-jupyter-notebook-path'];
-                    if (notebookPathHeader) {
-                        var nbpath = notebookPathHeader.match(/^\/notebooks\/(.*)$/)[1];
-                        kernels[data.id] = nbpath;
-                    } else {
-                        // TODO return error status, need notebook path to execute code
-                    }
-                }
-            } catch(e) {
-                // TODO error handling
-            }
-        });
+        var notebookPathHeader = req.headers['x-jupyter-notebook-path'];
+        var sessionId = req.headers['x-jupyter-session-id'];
+        if (!notebookPathHeader || !sessionId) {
+            // TODO return error status, need notebook path to execute code
+            console.error('Missing notebook path or session ID headers');
+            return;
+        }
+        var matches = notebookPathHeader.match(/^\/notebooks\/(.*)$/);
+        if (!matches) {
+            // TODO error handling
+            console.error('Invalid notebook path header');
+            return;
+        }
+        sessions[sessionId] = matches[1]; // store notebook path for later use
     }
 });
 

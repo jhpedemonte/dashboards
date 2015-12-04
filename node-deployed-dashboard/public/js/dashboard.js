@@ -35,12 +35,7 @@ require(['main'], function() {
         _initGrid();
 
         // start kernel
-        var ajaxOptions = {
-            requestHeaders: {
-                'X-jupyter-notebook-path': window.location.pathname
-            }
-        };
-        Kernel.start(ajaxOptions).then(function() {
+        Kernel.start().then(function() {
             // create an output area for each dashboard code cell
             $('.dashboard-cell.code-cell').each(function() {
                 var $cell = $(this);
