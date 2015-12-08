@@ -3,90 +3,132 @@
 // [pimvdb](http://stackoverflow.com/users/514749).
 // Licensed under [cc by-sa 3.0](http://creativecommons.org/licenses/by-sa/3.0/)
 
+/**
+ * Encodes one or more WebSocket messages.
+ * @param  {Array} data - array of message objects of the form:
+ *                            {
+ *                                [masks: array of WebSocket message mask octets,]
+ *                                payload: decoded message string
+ *                            }
+ * @return {Buffer} encoded messages
+ */
 function encodeWebSocket(data) {
-    var masks = data.masks;
-    var bytesRaw = data.payload;
+    data = [].concat(data || []); // ensure an array
     var bytesFormatted = [];
-    bytesFormatted[0] = 129;
-    if (bytesRaw.length <= 125) {
-        bytesFormatted[1] = bytesRaw.length;
-    } else if (bytesRaw.length >= 126 && bytesRaw.length <= 65535) {
-        bytesFormatted[1] = 126;
-        bytesFormatted[2] = ( bytesRaw.length / Math.pow(2, 8) ) & 255;
-        bytesFormatted[3] = ( bytesRaw.length                  ) & 255;
-    } else {
-        bytesFormatted[1] = 127;
-        bytesFormatted[2] = ( bytesRaw.length / Math.pow(2, 56) ) & 255;
-        bytesFormatted[3] = ( bytesRaw.length / Math.pow(2, 48) ) & 255;
-        bytesFormatted[4] = ( bytesRaw.length / Math.pow(2, 40) ) & 255;
-        bytesFormatted[5] = ( bytesRaw.length / Math.pow(2, 32) ) & 255;
-        bytesFormatted[6] = ( bytesRaw.length / Math.pow(2, 24) ) & 255;
-        bytesFormatted[7] = ( bytesRaw.length / Math.pow(2, 16) ) & 255;
-        bytesFormatted[8] = ( bytesRaw.length / Math.pow(2,  8) ) & 255;
-        bytesFormatted[9] = ( bytesRaw.length                   ) & 255;
-    }
-    if (masks) {
-        bytesFormatted[1] += 128; // set that it is masked
-        for (var j = 0, lenj = masks.length; j < lenj; j++) {
-            bytesFormatted.push(masks[j]);
+
+    // each message will be pushed into the buffer
+    for (var i = 0; i < data.length; i++) {
+        var d = data[i];
+        var masks = d.masks;
+        var bytesRaw = d.payload;
+        var masked = masks ? 128 : 0;
+
+        // Step 1: encode data type and mask bit
+        bytesFormatted.push(129);
+
+        // Step 2: encode data length
+        if (bytesRaw.length <= 125) {
+            bytesFormatted.push(bytesRaw.length + masked);
+        } else if (bytesRaw.length >= 126 && bytesRaw.length <= 65535) {
+            bytesFormatted.push(126 + masked,
+                                ( bytesRaw.length / Math.pow(2, 8) ) & 255,
+                                ( bytesRaw.length                  ) & 255);
+        } else {
+            bytesFormatted.push(127 + masked,
+                                ( bytesRaw.length / Math.pow(2, 56) ) & 255,
+                                ( bytesRaw.length / Math.pow(2, 48) ) & 255,
+                                ( bytesRaw.length / Math.pow(2, 40) ) & 255,
+                                ( bytesRaw.length / Math.pow(2, 32) ) & 255,
+                                ( bytesRaw.length / Math.pow(2, 24) ) & 255,
+                                ( bytesRaw.length / Math.pow(2, 16) ) & 255,
+                                ( bytesRaw.length / Math.pow(2,  8) ) & 255,
+                                ( bytesRaw.length                   ) & 255);
         }
-    }
-    var code;
-    for (var i = 0, len = bytesRaw.length; i < len; i++) {
-        code = bytesRaw.charCodeAt(i);
+
+        // Step 3: encode mask if necessary
         if (masks) {
-            code = code ^ data.masks[i % 4];
+            for (var j = 0; j < masks.length; j++) {
+                bytesFormatted.push(masks[j]);
+            }
         }
-        bytesFormatted.push(code);
+
+        // Step 4: encode data
+        var code;
+        for (var k = 0; k < bytesRaw.length; k++) {
+            code = bytesRaw.charCodeAt(k);
+            if (masks) {
+                code = code ^ masks[k % 4];
+            }
+            bytesFormatted.push(code);
+        }
     }
+
     return new Buffer(bytesFormatted);
 }
 
+/**
+ * Decodes Buffer data into one or more text WebSocket messages.
+ * @param  {Buffer} data - raw buffer of one or more WebSocket messages
+ * @return {Array} array of objects of the form:
+ *                    {
+ *                        masks: array of WebSocket message mask octets (null if not masked),
+ *                        payload: decoded message string
+ *                    }
+ */
 function decodeWebSocket(data) {
-    if (data[0] !== 129) {
-        // non-text data
-        return null;
+    var start = 0, end = 0, decodedData = [];
+
+    while (end < data.length) {
+        // determine message length and mask start
+        var datalength = data[start + 1] & 127;
+        var dataIdx = start + 2;
+
+        // compute length based on extra bytes
+        if (datalength === 126) { // 2 extra bytes
+            dataIdx = start + 4;
+            datalength = (data[start + 2] * Math.pow(2, 8)) +
+                          data[start + 3];
+        } else if (datalength === 127) { // 8 extra bytes
+            dataIdx = start + 10;
+            datalength = (data[start + 2] * Math.pow(2, 56)) +
+                         (data[start + 3] * Math.pow(2, 48)) +
+                         (data[start + 4] * Math.pow(2, 40)) +
+                         (data[start + 5] * Math.pow(2, 32)) +
+                         (data[start + 6] * Math.pow(2, 24)) +
+                         (data[start + 7] * Math.pow(2, 16)) +
+                         (data[start + 8] * Math.pow(2,  8)) +
+                          data[start + 9];
+        }
+
+        // get mask if present
+        var isMasked = !!(data[start + 1] & 128);
+        var masks = [0,0,0,0];
+        if (isMasked) {
+            masks = data.slice(dataIdx, dataIdx += 4);
+        }
+
+        // compute the end of the message
+        end = datalength + dataIdx;
+
+        // decode message data if text
+        if (data[start] === 129) {
+            var dataIdxRel = 0;
+            var output = '';
+            while (dataIdx < end) {
+                output += String.fromCharCode(data[dataIdx++] ^ masks[dataIdxRel++ % 4]);
+            }
+
+            decodedData.push({
+                masks: isMasked ? masks : null,
+                payload: output
+            });
+        }
+
+        // set start of next message in the buffer
+        start = end;
     }
-    var datalength = data[1] & 127;
-    var isMasked = !!(data[1] & 128);
-    var indexFirstMask = 2;
-    if (datalength == 126) {
-        indexFirstMask = 4;
-        // calculate real length
-        datalength = (data[2] * Math.pow(2, 8)) +
-                      data[3];
-    } else if (datalength == 127) {
-        indexFirstMask = 10;
-        // calculate real length
-        datalength = (data[2] * Math.pow(2, 56)) +
-                     (data[3] * Math.pow(2, 48)) +
-                     (data[4] * Math.pow(2, 40)) +
-                     (data[5] * Math.pow(2, 32)) +
-                     (data[6] * Math.pow(2, 24)) +
-                     (data[7] * Math.pow(2, 16)) +
-                     (data[8] * Math.pow(2,  8)) +
-                      data[9];
-    }
-    var i = 4;
-    var masks;
-    if (isMasked) {
-        masks = data.slice(indexFirstMask, indexFirstMask + 4);
-        i += indexFirstMask;
-    }
-    var end = datalength + i;
-    var index = 0;
-    var output = '';
-    var code;
-    while (i < end) {
-        code = isMasked ?
-                data[i++] ^ masks[index++ % 4] :
-                data[i++];
-        output += String.fromCharCode(code);
-    }
-    return {
-        masks: isMasked ? masks : null,
-        payload: output
-    };
+
+    return decodedData;
 }
 
 module.exports = {

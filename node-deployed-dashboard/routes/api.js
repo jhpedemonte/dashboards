@@ -10,7 +10,7 @@ var server = null;
 var sessions = {}; // TODO remove old sessions, somehow
 
 var proxy = httpProxy.createProxyServer({
-        target: KERNEL_GATEWAY_URL + '/api',
+        target: KERNEL_GATEWAY_URL + '/api'
     });
 
 function setupWSProxy(_server) {
@@ -21,42 +21,43 @@ function setupWSProxy(_server) {
     // WebSocket requests as well.
     var re = new RegExp('^/api(/.*$)');
     _server.on('upgrade', function(req, socket, head) {
-        var oldEmitFn = socket.emit;
+        var _emit = socket.emit;
         socket.emit = function(eventName, data) {
             if (eventName === 'data') {
                 var decodedData = wsutils.decodeWebSocket(data);
-                debug('PROXY: received message from client WS: ' + (decodedData && decodedData.payload));
 
                 // if (doFilter) {
                 //      return; // no-op; do not pass on data
                 // }
 
-                // for performance reasons, first do a quick string check before JSON parsing
-                if (decodedData && decodedData.payload.indexOf('execute_request') !== -1) {
-                    var payload = decodedData.payload;
-                    try {
-                        payload = JSON.parse(payload);
-                        if (payload.header.msg_type === 'execute_request') {
-                            // get notebook data for current session
-                            var nbpath = sessions[payload.header.session];
-                            var nb = nbstore.get(nbpath);
-                            // get code string for cell at index and update WS message
-                            var cellIdx = parseInt(payload.content.code, 10);
-                            var code = nb.cells[cellIdx].source.join('');
-                            payload.content.code = code;
-                            data = wsutils.encodeWebSocket({
-                                masks: decodedData.masks,
-                                payload: JSON.stringify(payload)
-                            });
+                for (var i = 0; i < decodedData.length; i++) {
+                    var d = decodedData[i];
+                    debug('PROXY: received message from client WS: ' + (d && d.payload));
+
+                    // substitute in code if necessary
+                    // for performance reasons, first do a quick string check before JSON parsing
+                    if (d && d.payload.indexOf('execute_request') !== -1) {
+                        try {
+                            d.payload = JSON.parse(d.payload);
+                            if (d.payload.header.msg_type === 'execute_request') {
+                                // get notebook data for current session
+                                var nbpath = sessions[d.payload.header.session];
+                                var nb = nbstore.get(nbpath);
+                                // get code string for cell at index and update WS message
+                                var cellIdx = parseInt(d.payload.content.code, 10);
+                                var code = nb.cells[cellIdx].source.join('');
+                                d.payload.content.code = code;
+                                d.payload = JSON.stringify(d.payload);
+                            }
+                        } catch(e) {
+                            // TODO better handle parse error in WS message
+                            console.error('Failed to parse `data` in WS', e);
                         }
-                    } catch(e) {
-                        // TODO handle parse error in WS message
-                        console.error('Failed to update `data` in WS', e);
-                        return; // don't forward message
                     }
                 }
+                data = wsutils.encodeWebSocket(decodedData);
             }
-            oldEmitFn.call(socket, eventName, data);
+            _emit.call(socket, eventName, data);
         };
 
         // remove '/api', otherwise proxies to '/api/api/...'
@@ -111,13 +112,13 @@ proxy.on('error', function(err, req, res) {
 
 proxy.on('open', function(proxySocket) {
     // listen for messages coming FROM the target here
-    proxySocket.on('data', function(data) {
-        var decodedData = wsutils.decodeWebSocket(data);
-        if (!decodedData) {
-            decodedData = { payload: '[non text data]' };
-        }
-        debug('PROXY: received message from target WS: ' + decodedData.payload);
-    });
+    // proxySocket.on('data', function(data) {
+    //     var decodedData = wsutils.decodeWebSocket(data);
+    //     if (!decodedData) {
+    //         decodedData = { payload: '[non text data]' };
+    //     }
+    //     debug('PROXY: received message from target WS: ' + decodedData.payload);
+    // });
 });
 
 proxy.on('close', function (req, socket, head) {
